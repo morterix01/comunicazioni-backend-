@@ -1,0 +1,12 @@
+{
+  "name": "comunicazioni-backend",
+  "version": "1.0.0",
+  "description": "Backend per inviare comunicazioni agli utenti dell'app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

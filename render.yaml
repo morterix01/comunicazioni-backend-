@@ -1,0 +1,13 @@
+# Deploy automatico su Render.
+# Render legge questo file e configura tutto da solo.
+services:
+  - type: web
+    name: comunicazioni-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # Render assegna PORT da solo: il server lo legge gia'.
+      - key: ADMIN_CODE
+        sync: false   # lo inserisci tu nella dashboard Render (codice invio)

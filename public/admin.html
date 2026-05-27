@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invia comunicazioni</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         margin: 0; background: #f3f4f6; color: #111; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+  input, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db;
+                    border-radius: 8px; font-size: 15px; font-family: inherit; }
+  textarea { min-height: 90px; resize: vertical; }
+  button { width: 100%; padding: 12px; border: 0; border-radius: 8px;
+           background: #2563eb; color: #fff; font-size: 15px; font-weight: 600;
+           cursor: pointer; margin-top: 12px; }
+  button:disabled { opacity: .6; cursor: default; }
+  button.danger { background: #dc2626; width: auto; padding: 6px 12px; font-size: 13px; margin: 0; }
+  .hidden { display: none; }
+  .msg { font-size: 14px; padding: 8px 10px; border-radius: 8px; margin-top: 10px; }
+  .msg.ok { background: #dcfce7; color: #166534; }
+  .msg.err { background: #fee2e2; color: #991b1b; }
+  .item { border-top: 1px solid #eee; padding: 12px 0; display: flex; gap: 10px;
+          align-items: flex-start; justify-content: space-between; }
+  .item h3 { margin: 0 0 4px; font-size: 15px; }
+  .item p { margin: 0; font-size: 14px; color: #374151; white-space: pre-wrap; }
+  .item time { font-size: 12px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 1) Blocco codice -->
+  <div id="gate" class="card">
+    <h1>Accesso comunicazioni</h1>
+    <label for="code">Codice</label>
+    <input id="code" type="password" inputmode="numeric" autocomplete="off" placeholder="Inserisci il codice">
+    <button id="unlock">Sblocca</button>
+    <div id="gateMsg"></div>
+  </div>
+
+  <!-- 2) Pannello invio (nascosto finche' non sblocchi) -->
+  <div id="panel" class="hidden">
+    <div class="card">
+      <h1>Nuova comunicazione</h1>
+      <label for="title">Titolo</label>
+      <input id="title" type="text" maxlength="120" placeholder="Es. Riunione di venerdì">
+      <label for="body">Testo</label>
+      <textarea id="body" maxlength="2000" placeholder="Scrivi il messaggio..."></textarea>
+      <button id="send">Invia a tutti gli utenti</button>
+      <div id="sendMsg"></div>
+    </div>
+
+    <div class="card">
+      <h1>Comunicazioni inviate</h1>
+      <div id="list">Caricamento...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Base URL del backend: stessa origine da cui e' servita la pagina.
+  const API = '';
+  let adminCode = '';
+
+  const $ = (id) => document.getElementById(id);
+  function show(el, type, text) {
+    el.className = 'msg ' + type;
+    el.textContent = text;
+  }
+
+  // --- sblocco: il codice viene VALIDATO dal server, non solo qui ---
+  $('unlock').addEventListener('click', async () => {
+    const code = $('code').value.trim();
+    if (!code) return;
+    try {
+      const r = await fetch(API + '/api/admin/check', {
+        method: 'POST',
+        headers: { 'X-Admin-Code': code }
+      });
+      if (!r.ok) { show($('gateMsg'), 'err', 'Codice non valido'); return; }
+      adminCode = code;
+      $('gate').classList.add('hidden');
+      $('panel').classList.remove('hidden');
+      loadList();
+    } catch {
+      show($('gateMsg'), 'err', 'Server non raggiungibile');
+    }
+  });
+  $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('unlock').click(); });
+
+  // --- invio ---
+  $('send').addEventListener('click', async () => {
+    const title = $('title').value.trim();
+    const body = $('body').value.trim();
+    if (!title && !body) { show($('sendMsg'), 'err', 'Scrivi almeno titolo o testo'); return; }
+    $('send').disabled = true;
+    try {
+      const r = await fetch(API + '/api/communications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Code': adminCode },
+        body: JSON.stringify({ title, body })
+      });
+      if (!r.ok) throw new Error();
+      $('title').value = ''; $('body').value = '';
+      show($('sendMsg'), 'ok', 'Comunicazione inviata');
+      loadList();
+    } catch {
+      show($('sendMsg'), 'err', 'Errore durante l\'invio');
+    } finally {
+      $('send').disabled = false;
+    }
+  });
+
+  // --- lista + cancellazione ---
+  async function loadList() {
+    const box = $('list');
+    try {
+      const r = await fetch(API + '/api/communications');
+      const items = await r.json();
+      if (!items.length) { box.textContent = 'Nessuna comunicazione.'; return; }
+      box.innerHTML = '';
+      for (const it of items) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        const left = document.createElement('div');
+        left.innerHTML = '<h3></h3><p></p><time></time>';
+        left.querySelector('h3').textContent = it.title || '(senza titolo)';
+        left.querySelector('p').textContent = it.body || '';
+        left.querySelector('time').textContent = new Date(it.createdAt).toLocaleString('it-IT');
+        const del = document.createElement('button');
+        del.className = 'danger';
+        del.textContent = 'Elimina';
+        del.onclick = () => removeItem(it.id);
+        div.appendChild(left);
+        div.appendChild(del);
+        box.appendChild(div);
+      }
+    } catch {
+      box.textContent = 'Errore nel caricamento.';
+    }
+  }
+
+  async function removeItem(id) {
+    if (!confirm('Eliminare questa comunicazione?')) return;
+    await fetch(API + '/api/communications/' + id, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Code': adminCode }
+    });
+    loadList();
+  }
+</script>
+</body>
+</html>
