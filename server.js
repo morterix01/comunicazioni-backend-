@@ -81,12 +81,14 @@ app.post('/api/admin/check', requireAdmin, (req, res) => {
 app.post('/api/communications', requireAdmin, (req, res) => {
   const title = String(req.body.title || '').trim();
   const body = String(req.body.body || '').trim();
+  const tipo = String(req.body.tipo || 'C').trim().toUpperCase().slice(0, 1);
   if (!title && !body) {
     return res.status(400).json({ error: 'Titolo o testo obbligatori' });
   }
   const list = readAll();
   const item = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    tipo,
     title,
     body,
     createdAt: Date.now()
